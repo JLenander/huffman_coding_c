@@ -12,20 +12,24 @@ data structure implementation for larger alphabets. */
 
 /*
 The data type used for the encoding of an alphabet.
-Denoted by <name>
+Denoted by <name>.
+<alphabetlen> is the length of the alphabet
 */
 typedef struct encoding {
     char name[MAX_NAME];
+    int alphabetlen;
     char alphabet[MAX_ALPHABET_LEN];
     int encodings[MAX_ALPHABET_LEN];
 } Encoding;
 
 /*
 The data type used for the input to the encoding generation algorithm.
-Denoted by <name>
+Denoted by <name>.
+<alphabetlen> is the length of the alphabet
 */
 typedef struct frequencies {
     char name[MAX_NAME];
+    int alphabetlen;
     char alphabet[MAX_ALPHABET_LEN];
     float frequencies[MAX_ALPHABET_LEN];
 } Frequencies;

@@ -49,6 +49,7 @@ int load(char *filepath, Encoding *encoding) {
     if (fread(&newenc, sizeof(Encoding), 1, file) == 1) {
         // Success, copy the data over
         strncpy(encoding->name, newenc.name, MAX_NAME);
+        encoding->alphabetlen = newenc.alphabetlen;
         for (int i = 0; i < MAX_ALPHABET_LEN; i++) {
             encoding->alphabet[i] = newenc.alphabet[i];
             encoding->encodings[i] = newenc.encodings[i];
@@ -72,12 +73,19 @@ On error, returns:
     - 2 if the encoding could not be saved for some reaons
 
 The file is saved with the 5-byte header "HFENC" immediately followed by the
-Encoding struct data.
+Encoding struct data. Entries in encoding.alphabet and encoding.encodings
+after index alphabetlen - 1 are zeroed.
 */
 int save(char *filepath, Encoding encoding) {
     FILE *file = fopen(filepath, "wb");
     if (file == NULL) {
         return 1;
+    }
+
+    // Zeroes the unused entries
+    for (int i = encoding.alphabetlen - 1; i < MAX_ALPHABET_LEN; i++) {
+        encoding.alphabet[i] = '\0';
+        encoding.encodings[i] = -1;
     }
 
     // Write the header bytes
