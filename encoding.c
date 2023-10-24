@@ -83,7 +83,7 @@ int save(char *filepath, Encoding encoding) {
     }
 
     // Zeroes the unused entries
-    for (int i = encoding.alphabetlen - 1; i < MAX_ALPHABET_LEN; i++) {
+    for (int i = encoding.alphabetlen; i < MAX_ALPHABET_LEN; i++) {
         encoding.alphabet[i] = '\0';
         encoding.encodings[i] = -1;
     }
