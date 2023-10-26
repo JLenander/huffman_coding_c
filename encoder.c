@@ -12,8 +12,8 @@ typedef struct inputArgData {
     bool compressing;
     FILE *inputFile;
     FILE *outputFile;
-    // The file containing the encoding representation.
-    FILE *encodingFile;
+    // The filepath containing the encoding representation.
+    char *encodingFilepath;
 } InputArgData;
 
 /*
@@ -131,11 +131,16 @@ InputArgData parse_input_args(int argc, char **argv) {
     InputArgData inputArgs;
 
     inputArgs.compressing = compressing;
-    inputArgs.encodingFile = fopen(encodingFilepath, "rb");
     inputArgs.inputFile = fopen(inputFilepath, "r");
     inputArgs.outputFile = fopen(outputFilepath, "w");
+    inputArgs.encodingFilepath = strdup(encodingFilepath);
 
-    if (inputArgs.encodingFile == NULL || inputArgs.inputFile == NULL || inputArgs.outputFile == NULL) {
+    if (inputArgs.encodingFilepath == NULL) {
+        fprintf(stderr, "Failed to allocate memory for encoding filepath\n");
+        exit(1);
+    }
+
+    if (inputArgs.inputFile == NULL || inputArgs.outputFile == NULL) {
         fprintf(stderr, "Failed to open one or more files\n");
         exit(1);
     }
@@ -143,12 +148,262 @@ InputArgData parse_input_args(int argc, char **argv) {
     return inputArgs;
 }
 
-int encode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
-    return -1;
+/*
+Returns the ith bit of the <buffer>
+*/
+int get_ith_bit(unsigned char buffer[MAX_ENC_SIZE * 2], int i) {
+    return (buffer[i / 8] >> i % 8) & 1;
 }
 
+/*
+Set the ith bit of the <buffer> to <bit>
+*/
+void set_ith_bit(unsigned char buffer[MAX_ENC_SIZE * 2], int i, int bit) {
+    if (bit) {
+        // Bit exists, ensure bit is set to 1
+        buffer[i / 8] = buffer[i / 8] | (1 << i % 8);
+    } else {
+        // Bit is zero, ensure bit is set to 0
+        buffer[i / 8] = buffer[i / 8] & (255 - (1 << i % 8));
+    }
+}
+
+/*
+Insert the integer <integer> into the buffer starting at bit <i>.
+*/
+void insert_int_by_bit(unsigned int integer, unsigned char buffer[MAX_ENC_SIZE * 2], int i) {
+    // j is the relative index of the bit starting at i
+    for (int j = 0; j < sizeof(int) * 8; j++) {
+        // The absolute index of the bit
+        int bit_index = j + i;
+        // The bit to insert
+        int bit = (integer >> j) & 1;
+        // We insert the bit by xoring the existing char with
+        // the bit in the appropriate index within the char
+        set_ith_bit(buffer, bit_index, bit);
+    }
+}
+
+/*
+Returns the number of bits needed to represent the number <n>.
+*/
+int num_bits(int n) {
+    int num_bits = 0;
+    while (n > 0) {
+        n = n >> 1;
+        num_bits++;
+    }
+    return num_bits;
+}
+
+/*
+Given a plaintext <inputFile> and an <encoding>, encode the input file.
+
+The characters are encoded in 8 bit buffers
+
+Returns 0 on success.
+Returns 1 if a character that is not in the encoding alphabet is encountered.
+Returns 2 if there was an error writing to the <outputFile>
+*/
+int encode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
+    // We use buffer to store up to 1 byte at a time until we can write a byte to the file.
+    int buffer[8];
+    // The index of the buffer to write the next bit to
+    int nextbit = 0;
+
+    char nextChar = '\0';
+    while ((nextChar = fgetc(inputFile)) != EOF) {
+        for (int i = 0; i <= encoding.alphabetlen; i++) {
+            if (i == encoding.alphabetlen) {
+                // Did not find the character in the alphabet
+                return 1;
+            }
+
+            if (encoding.alphabet[i] == nextChar) {
+                int charEnc = encoding.encodings[i];
+
+                // The index of the bit in charEnc to write to the buffer
+                // starting at the highest bit and going down to bit at index 0
+                int biti = num_bits(charEnc) - 1;
+                do {
+                    // Take only the bit at index biti from charEnc
+                    buffer[nextbit] = (charEnc >> biti) & 1;
+                    biti--;
+                    nextbit++;
+
+                    // Write the bits out if we've filled the buffer
+                    if (nextbit == 8) {
+                        nextbit = 0;
+                        
+                        // Construct a 8-bit sequence in a char type
+                        unsigned char bufferChar = 0;
+
+                        for (int j = 0; j < 8; j++) {
+                            // We bitshift the buffer by the appropriate bits
+                            bufferChar += buffer[j] << j;
+                        }
+
+                        // Write out the corresponding encoding.
+                        if (fwrite(&bufferChar, 1, 1, outputFile) != 1) {
+                            // Failed to write the character
+                            return 2;
+                        }
+                    }
+                } while (biti >= 0);
+
+                // We've found and written the character so break out of the for loop.
+                break;
+            }
+        }
+    }
+
+    // Write the remaining bits out with 0 as padding.
+    char bufferChar = 0;
+    for (int i = nextbit; i < 8; i++) {
+        buffer[i] = 0;
+    }
+    for (int j = 0; j < 8; j++) {
+        bufferChar += buffer[j] << j;
+    }
+    // Write out the corresponding encoding.
+    if (fwrite(&bufferChar, 1, 1, outputFile) != 1) {
+        // Failed to write the character
+        return 2;
+    }
+
+    return 0;
+}
+
+/*
+Helper for decode_file().
+Decode the bits in the 2*MAX_ENC_SIZE byte-sized <buffer>.
+Stores the index of the start of the current encoding we are examining in 
+<currEncodingIndex>.
+Writes recognized characters to <outputFile>.
+Uses Encoding <encoding>.
+
+Returns 0 on success.
+Returns 1 if an encoded character that is not in the encoding alphabet is encountered.
+Returns 2 if the output file cannot be written to.
+*/
+int decode_buffer(unsigned char buffer[MAX_ENC_SIZE * 2], int *currEncodingIndex, int bufferEnd,
+                   FILE *outputFile, Encoding encoding) {
+    // bufferEnc holds the buffered encoding bits.
+    unsigned int bufferEnc = 0;
+
+    for (int i = 0; i < bufferEnd; i++) {
+        if (i - *currEncodingIndex == MAX_ENC_SIZE * 8) {
+            // Maximum encoding size reached, this encoding is not valid
+            return 1;
+        }
+
+        // Add the ith bit in buffer into the bufferEnc
+        bufferEnc += get_ith_bit(buffer, i);
+
+        // Search for the encoding in the alphabet
+        for (int j = 0; j < encoding.alphabetlen; j++) {
+            if (bufferEnc == 0) {
+                // 0 is reserved for padding
+                break;
+            }
+
+            if (encoding.encodings[j] == bufferEnc) {
+                // Found character, write out to file
+                if (fwrite(&encoding.alphabet[j], 1, 1, outputFile) != 1) {
+                    return 2;
+                }
+
+                // reset the buffered encoding back to 0
+                bufferEnc = 0;
+                // set the new start of the next encoding
+                *currEncodingIndex = i + 1;
+
+                break;
+            }
+        }
+
+        // If unrecognized, shift bits over 1 left to make room for next bit
+        // (does nothing if bufferInt is 0)
+        bufferEnc = bufferEnc << 1;
+    }
+
+    return 0;
+}
+
+/*
+Given a compressed <inputFile> and an <encoding>, decode the input file.
+
+Returns 0 on success.
+Returns 1 if an encoded character that is not in the encoding alphabet is encountered.
+Returns 2 if there was an error writing to the <outputFile>
+Returns 3 if there was an error reading from <inputFile>
+*/
 int decode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
-    return -1;
+    // We keep a bit buffer for the input.
+    // (an individual character can be encoded in at most MAX_ENC_SIZE bytes
+    // and so we keep 2 * MAX_ENC_SIZE bytes for overflow purposes)
+    unsigned char buffer[MAX_ENC_SIZE * 2];
+
+    // Fill the buffer with zeroes
+    for (int i = 0; i < MAX_ENC_SIZE * 2; i++) {
+        buffer[i] = 0;
+    }
+
+    // Read in MAX_ENC_SIZE bytes into the buffer starting at the next available bit
+    unsigned int readbuffer = 0;
+    // The index after the last bit of data in the buffer.
+    int bufferEnd = 0;
+    // Keeps track of how many bytes were read for the last call
+    int bytes_read = 0;
+    while ((bytes_read = fread(&readbuffer, 1, MAX_ENC_SIZE, inputFile)) == MAX_ENC_SIZE) {
+        // Insert the readbuffer into the correct bits in the bit buffer <buffer>
+        insert_int_by_bit(readbuffer, buffer, bufferEnd);
+        bufferEnd += MAX_ENC_SIZE * 8;
+
+        // Greedily decode the buffered bits
+        // holds the index of the start of the current encoding for shifting the buffer over
+        int currEncodingIndex = 0;
+        
+        // Decode all character encodings present in the buffer
+        int decode_ret = decode_buffer(buffer, &currEncodingIndex, bufferEnd, outputFile, encoding);
+        if (decode_ret != 0) {
+            return decode_ret;
+        }
+
+        // Shift all leftover bits to the beginning of the buffer.
+        // Pad any extra space with zeroes.
+        int leftover_bit_count = 0;
+        // ri tracks the index of the leftover buffered bits
+        int ri = currEncodingIndex;
+        // li tracks the index starting from the left side of the buffer
+        for (int li = 0; li < (MAX_ENC_SIZE * 2) * 8; li++) {
+            // If there are no more leftover bits, we set the lith bit to 0.
+            int leftover_bit = 0;
+            if (ri < bufferEnd) {
+                // There are still leftover bits to read
+                // The leftover bit from the buffer at index ri.
+                leftover_bit = get_ith_bit(buffer, ri);
+                leftover_bit_count++;
+            }
+
+            // Set the lith bit in the buffer to the leftover bit
+            set_ith_bit(buffer, li, leftover_bit);
+            ri++;
+        }
+        bufferEnd = leftover_bit_count;
+    }
+
+    if (ferror(inputFile)) {
+        return 3;
+    }
+
+    insert_int_by_bit(readbuffer, buffer, bufferEnd);
+    bufferEnd += bytes_read * 8;
+
+    // Take care of any remaining bytes
+    int currEncodingIndex = 0;
+    int decode_ret = decode_buffer(buffer, &currEncodingIndex, bufferEnd, outputFile, encoding);
+    return decode_ret;
 }
 
 /* This program reads a text file and compresses or decompresses the file as specified
@@ -163,6 +418,16 @@ Options:
 */
 int main(int argc, char **argv) {
     InputArgData inputData = parse_input_args(argc, argv);
+
+    Encoding encoding;
+
+    load(inputData.encodingFilepath, &encoding);
+
+    if (inputData.compressing) {
+        return encode_file(inputData.inputFile, inputData.outputFile, encoding);
+    } else {
+        return decode_file(inputData.inputFile, inputData.outputFile, encoding);
+    }
 
     return 0;
 }

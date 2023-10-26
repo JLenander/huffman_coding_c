@@ -9,6 +9,8 @@ data structure implementation for larger alphabets. */
 // The header is the first HEADER_SIZE bytes that identify the encoding file
 #define HEADER_SIZE 5
 #define HEADER "HFENC"
+// The maximum size of any single encoding in bytes
+#define MAX_ENC_SIZE sizeof(int)
 
 /*
 The data type used for the encoding of an alphabet.
