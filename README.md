@@ -5,6 +5,8 @@ A proof and C implementation of Huffman codes for lossless compression of text.
 The lossless compression works with an input of characters and their frequencies.
 
 The `create_encoding` algorithm first creates a prefix-free bit encoding of the characters in order to reduce their size.
+This algorithm uses a priority queue which is implemented in [`priority_queue.c`](priority_queue.c)
+with a min-heap structure implemented with an array.
 
 The `encode_file` algorithm in [`encoder.c`](encoder.c) takes text in and outputs an encoded (compressed) bitstream
 
