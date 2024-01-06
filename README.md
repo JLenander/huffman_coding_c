@@ -1,6 +1,6 @@
 # Lossless Compression Implementation
 
-A proof and C implementation of Huffman codes for lossless compression of text.
+A C implementation of Huffman codes for lossless compression of text.
 
 The lossless compression works with an input of characters and their frequencies.
 
