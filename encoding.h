@@ -37,14 +37,6 @@ typedef struct frequencies {
 } Frequencies;
 
 /*
-The data type for a tree node (implemented using an array in the algorithm).
-*/
-typedef struct symbol {
-    char character;
-    float frequency;
-} Symbol;
-
-/*
 Load the encoding from <filepath> into <encoding>.
 Returns 0 on success.
 On error, returns:
