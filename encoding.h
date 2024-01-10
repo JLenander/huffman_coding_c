@@ -37,6 +37,18 @@ typedef struct frequencies {
 } Frequencies;
 
 /*
+Parse the int array into an integer encoding.
+
+The entries of <intArr> should be 0 or 1 for the length of the encoding and -1 to indicate
+the encoding is finished.
+
+<arrMaxLen> denotes the maximum length of <intArr> and must be at least 1
+
+If we reach the end of the array or the integer bit limit return the encoding up until this point.
+*/
+int encodingArrToInt(int intArr[], int arrMaxLen);
+
+/*
 Load the encoding from <filepath> into <encoding>.
 Returns 0 on success.
 On error, returns:
