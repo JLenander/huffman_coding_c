@@ -1,12 +1,24 @@
 /*
+A Tree node for a binary tree
+If left and right are NULL pointers, this node is a leaf node
+*/
+typedef struct tree {
+    char symbol;
+    Tree *left;
+    Tree *right;
+} Tree;
+
+/*
 A QueueItem is an item in a priority queue
 Empty is 1 if this QueueItem should be considered empty or NULL in the queue structure
-Empty is 0 if this QueueItem contains data as part of the queue structure.
+Empty is 0 if this QueueItem contains data as part of the queue structure
+Every QueueItem corresponds to a node in a binary tree and so has a pointer to that tree node
 */
 typedef struct queue_item {
     char symbol;
     float weight;
     int empty;
+    Tree *treeNode;
 } QueueItem;
 
 /*
@@ -23,8 +35,9 @@ typedef struct priority_queue {
 
 /*
 Initializes and returns a new nonempty QueueItem
+If <treeNode> is NULL, a new Tree struct will be created with <symbol>
 */
-QueueItem newQueueItem(char symbol, float weight);
+QueueItem newQueueItem(char symbol, float weight, Tree *treeNode);
 
 /*
 Initializes and returns a pointer to a new priority queue

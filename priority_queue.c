@@ -3,13 +3,36 @@
 #include "priority_queue.h"
 
 /*
-Initializes and returns a new nonempty QueueItem
+Initializes and returns a pointer to a new Tree with <symbol> and no children.
 */
-QueueItem newQueueItem(char symbol, float weight) {
+Tree *newTree(char symbol) {
+    Tree *tree = malloc(sizeof(Tree));
+    if (tree == NULL) {
+        fprintf(stderr, "Failed to allocate memory for a new Tree in a QueueItem\n");
+        exit(1);
+    }
+
+    tree->symbol = symbol;
+    tree->left = NULL;
+    tree->right = NULL;
+
+    return tree;
+}
+
+/*
+Initializes and returns a new nonempty QueueItem.
+If <treeNode> is NULL, a new Tree struct will be allocated with <symbol> and no children
+*/
+QueueItem newQueueItem(char symbol, float weight, Tree *treeNode) {
     QueueItem item;
     item.symbol = symbol;
     item.weight = weight;
     item.empty = 0;
+    if (treeNode == NULL) {
+        item.treeNode = newTree(symbol);
+    } else {
+        item.treeNode = treeNode;
+    }
     return item;
 }
 
