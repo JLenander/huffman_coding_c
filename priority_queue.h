@@ -4,8 +4,8 @@ If left and right are NULL pointers, this node is a leaf node
 */
 typedef struct tree {
     char symbol;
-    Tree *left;
-    Tree *right;
+    struct tree *left;
+    struct tree *right;
 } Tree;
 
 /*
@@ -32,6 +32,11 @@ typedef struct priority_queue {
     int maxQueueLength;
     int length;
 } PriorityQueue;
+
+/*
+Initializes and returns a pointer to a new Tree with <symbol> and no children.
+*/
+Tree *newTree(char symbol);
 
 /*
 Initializes and returns a new nonempty QueueItem
