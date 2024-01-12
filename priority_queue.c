@@ -59,6 +59,7 @@ PriorityQueue *newQueue(int maxQueueLength) {
         pqueue->queue[i].symbol = '\0';
         pqueue->queue[i].weight = 0.0;
         pqueue->queue[i].empty = 1;
+        pqueue->queue[i].treeNode = NULL;
     }
 
     return pqueue;
