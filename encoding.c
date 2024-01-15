@@ -4,33 +4,34 @@
 #include <unistd.h>
 #include "encoding.h"
 
-/*
-Parse the int array into an integer encoding.
+// /*
+// Parse the int array into an integer encoding.
 
-The entries of <intArr> should be 0 or 1 for the length of the encoding and -1 to indicate
-the encoding is finished.
+// The entries of <intArr> should be 0 or 1 for the length of the encoding and -1 to indicate
+// the encoding is finished.
 
-<arrMaxLen> denotes the maximum length of <intArr> and must be at least 1
+// <arrMaxLen> denotes the maximum length of <intArr> and must be at least 1
 
-If we reach the end of the array or the integer bit limit return the encoding up until this point.
-*/
-int encodingArrToInt(int intArr[], int arrMaxLen) {
-    // Ensure we do not exceed the integer limit
-    arrMaxLen = (arrMaxLen > sizeof(int) * 8) ? sizeof(int) * 8 : arrMaxLen;
+// If we reach the end of the array or the integer bit limit return the encoding up until this point.
+// */
+// int encodingArrToInt(int intArr[], int arrMaxLen) {
+//     // Ensure we do not exceed the integer limit
+//     arrMaxLen = (arrMaxLen > sizeof(int) * 8) ? sizeof(int) * 8 : arrMaxLen;
 
-    int encoding = intArr[0];
+//     int encoding = intArr[0];
 
-    for (int i = 1; i < arrMaxLen; i++) {
-        if (intArr[i] == -1) {
-            return encoding;
-        }
+//     for (int i = 1; i < arrMaxLen; i++) {
+//         if (intArr[i] == -1) {
+//             return encoding;
+//         }
 
-        encoding = encoding << 1;
-        encoding += intArr[i];
-    }
+//         encoding = encoding << 1;
+//         encoding += intArr[i];
+//     }
 
-    return encoding;
-}
+//     return encoding;
+// }
+
 
 /*
 Load the encoding from <filepath> into <encoding>.
@@ -80,7 +81,8 @@ int load(char *filepath, Encoding *encoding) {
         encoding->alphabetlen = newenc.alphabetlen;
         for (int i = 0; i < MAX_ALPHABET_LEN; i++) {
             encoding->alphabet[i] = newenc.alphabet[i];
-            encoding->encodings[i] = newenc.encodings[i];
+            // encoding->encodings[i] = newenc.encodings[i];
+            memcpy(encoding->encodings[i], newenc.encodings[i], sizeof(int) * MAX_ENC_SIZE_BITS);
         }
 
         fclose(file);
@@ -110,10 +112,13 @@ int save(char *filepath, Encoding encoding) {
         return 1;
     }
 
-    // Zeroes the unused entries
+    // Zero the empty entries
     for (int i = encoding.alphabetlen; i < MAX_ALPHABET_LEN; i++) {
         encoding.alphabet[i] = '\0';
-        encoding.encodings[i] = -1;
+        // encoding.encodings[i] = -1;
+        for (int j = 0; j < MAX_ENC_SIZE_BITS; j++) {
+            encoding.encodings[i][j] = ENC_END;
+        }
     }
 
     // Write the header bytes

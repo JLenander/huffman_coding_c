@@ -151,14 +151,14 @@ InputArgData parse_input_args(int argc, char **argv) {
 /*
 Returns the ith bit of the <buffer>
 */
-int get_ith_bit(unsigned char buffer[MAX_ENC_SIZE * 2], int i) {
+int get_ith_bit(unsigned char buffer[MAX_ENC_SIZE_BITS * 2], int i) {
     return (buffer[i / 8] >> i % 8) & 1;
 }
 
 /*
 Set the ith bit of the <buffer> to <bit>
 */
-void set_ith_bit(unsigned char buffer[MAX_ENC_SIZE * 2], int i, int bit) {
+void set_ith_bit(unsigned char buffer[MAX_ENC_SIZE_BITS * 2], int i, int bit) {
     if (bit) {
         // Bit exists, ensure bit is set to 1
         buffer[i / 8] = buffer[i / 8] | (1 << i % 8);
@@ -169,28 +169,30 @@ void set_ith_bit(unsigned char buffer[MAX_ENC_SIZE * 2], int i, int bit) {
 }
 
 /*
-Insert the integer <integer> into the buffer starting at bit <i>.
+Insert the integer <integer> into the bit buffer starting at bit <i>.
 */
-void insert_int_by_bit(unsigned int integer, unsigned char buffer[MAX_ENC_SIZE * 2], int i) {
+void insert_int_by_bit(unsigned int integer, char buffer[MAX_ENC_SIZE_BITS * 2], int i) {
     // j is the relative index of the bit starting at i
     for (int j = 0; j < sizeof(int) * 8; j++) {
         // The absolute index of the bit
         int bit_index = j + i;
         // The bit to insert
         int bit = (integer >> j) & 1;
-        // We insert the bit by xoring the existing char with
-        // the bit in the appropriate index within the char
-        set_ith_bit(buffer, bit_index, bit);
+
+        buffer[bit_index] = bit;
     }
 }
 
 /*
-Returns the number of bits needed to represent the number <n>.
+Returns the number of bits in the encoding array.
+This is the number of entries before we reach ENC_END.
 */
-int num_bits(int n) {
+int num_bits(int enc[MAX_ENC_SIZE_BITS]) {
     int num_bits = 0;
-    while (n > 0) {
-        n = n >> 1;
+    for (int i = 0; i < MAX_ENC_SIZE_BITS; i++) {
+        if (enc[i] == ENC_END) {
+            return num_bits;
+        }
         num_bits++;
     }
     return num_bits;
@@ -209,7 +211,7 @@ int encode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
     // We use buffer to store up to 1 byte at a time until we can write a byte to the file.
     int buffer[8];
     // The index of the buffer to write the next bit to
-    int nextbit = 0;
+    int bufferi = 0;
 
     char nextChar = '\0';
     while ((nextChar = fgetc(inputFile)) != EOF) {
@@ -220,20 +222,25 @@ int encode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
             }
 
             if (encoding.alphabet[i] == nextChar) {
-                int charEnc = encoding.encodings[i];
+                int charEnc[MAX_ENC_SIZE_BITS];
+                for (int j = 0; j < MAX_ENC_SIZE_BITS; j++) {
+                    charEnc[j] = encoding.encodings[i][j];
+                }
 
                 // The index of the bit in charEnc to write to the buffer
-                // starting at the highest bit and going down to bit at index 0
-                int biti = num_bits(charEnc) - 1;
+                // starting at the lowest bit until we've written the whole encoding.
+                // If the encoding is more than a byte in length, the buffer will be written
+                // out to the file.
+                int numBits = num_bits(charEnc);
+                int biti = 0;
                 do {
-                    // Take only the bit at index biti from charEnc
-                    buffer[nextbit] = (charEnc >> biti) & 1;
-                    biti--;
-                    nextbit++;
+                    buffer[bufferi] = charEnc[biti];
+                    biti++;
+                    bufferi++;
 
                     // Write the bits out if we've filled the buffer
-                    if (nextbit == 8) {
-                        nextbit = 0;
+                    if (bufferi == 8) {
+                        bufferi = 0;
                         
                         // Construct a 8-bit sequence in a char type
                         unsigned char bufferChar = 0;
@@ -249,7 +256,7 @@ int encode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
                             return 2;
                         }
                     }
-                } while (biti >= 0);
+                } while (biti < numBits);
 
                 // We've found and written the character so break out of the for loop.
                 break;
@@ -257,17 +264,26 @@ int encode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
         }
     }
 
-    // Write the remaining bits out with 0 as padding.
+    // Write the remaining bits out with 0 as padding and write out the footer
+    char numPaddingBits = 0;
     char bufferChar = 0;
-    for (int i = nextbit; i < 8; i++) {
+    for (int i = bufferi; i < 8; i++) {
         buffer[i] = 0;
+        numPaddingBits++;
     }
     for (int j = 0; j < 8; j++) {
         bufferChar += buffer[j] << j;
     }
-    // Write out the corresponding encoding.
+
+    // Write out the corresponding padded encoding for the last character
     if (fwrite(&bufferChar, 1, 1, outputFile) != 1) {
         // Failed to write the character
+        return 2;
+    }
+
+    // Write out the footer with the number of padding bits used
+    if (fwrite(&numPaddingBits, FOOTER_SIZE, 1, outputFile) != 1) {
+        // Failed to write footer
         return 2;
     }
 
@@ -275,8 +291,31 @@ int encode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
 }
 
 /*
+Helper for decode_buffer().
+Compares the <charEncArr> and the <intEncArr> to see if they contain the same encoding.
+Two encodings are considered the same if they have the n elements in common followed by a single
+ENC_END element (this means elements after the first ENC_END encountered are not checked).
+
+Returns 0 if the buffers do not contain the same encoding.
+Returns 1 if the buffers contain the same encoding.
+*/
+int sameEncoding(int intEncArr[MAX_ENC_SIZE_BITS], char charEncArr[MAX_ENC_SIZE_BITS]) {
+    for (int i = 0; i < MAX_ENC_SIZE_BITS; i++) {
+        if (intEncArr[i] != charEncArr[i]) {
+            return 0;
+        }
+
+        if (charEncArr[i] == ENC_END) {
+            return 1;
+        }
+    }
+
+    return 1;
+}
+
+/*
 Helper for decode_file().
-Decode the bits in the 2*MAX_ENC_SIZE byte-sized <buffer>.
+Decode the bits in the 2*MAX_ENC_SIZE_BITS sized <buffer>.
 Stores the index of the start of the current encoding we are examining in 
 <currEncodingIndex>.
 Writes recognized characters to <outputFile>.
@@ -286,45 +325,46 @@ Returns 0 on success.
 Returns 1 if an encoded character that is not in the encoding alphabet is encountered.
 Returns 2 if the output file cannot be written to.
 */
-int decode_buffer(unsigned char buffer[MAX_ENC_SIZE * 2], int *currEncodingIndex, int bufferEnd,
+int decode_buffer(char buffer[MAX_ENC_SIZE_BITS * 2], int *currEncodingIndex, int bufferEnd,
                    FILE *outputFile, Encoding encoding) {
-    // bufferEnc holds the buffered encoding bits.
-    unsigned int bufferEnc = 0;
+    // encArr holds the buffered encoding bits as we match encArr with encodings in <encoding>
+    char encArr[MAX_ENC_SIZE_BITS];
+    for (int i = 0; i < MAX_ENC_SIZE_BITS; i++) {
+        encArr[i] = ENC_END;
+    }
 
-    for (int i = 0; i < bufferEnd; i++) {
-        if (i - *currEncodingIndex == MAX_ENC_SIZE * 8) {
+    for (int bufferi = 0; bufferi < bufferEnd; bufferi++) {
+        int encArri = bufferi - *currEncodingIndex;
+        if (encArri == MAX_ENC_SIZE_BITS) {
             // Maximum encoding size reached, this encoding is not valid
             return 1;
         }
 
-        // Add the ith bit in buffer into the bufferEnc
-        bufferEnc += get_ith_bit(buffer, i);
+        // Add the ith bit in buffer into the buffered encoding <enc>
+        encArr[encArri] = buffer[bufferi];
 
         // Search for the encoding in the alphabet
-        for (int j = 0; j < encoding.alphabetlen; j++) {
-            if (bufferEnc == 0) {
-                // 0 is reserved for padding
+        for (int encodingsi = 0; encodingsi < encoding.alphabetlen; encodingsi++) {
+            if (encArr[encArri] == ENC_END) {
                 break;
             }
 
-            if (encoding.encodings[j] == bufferEnc) {
+            if (sameEncoding(encoding.encodings[encodingsi], encArr)) {
                 // Found character, write out to file
-                if (fwrite(&encoding.alphabet[j], 1, 1, outputFile) != 1) {
+                if (fwrite(&encoding.alphabet[encodingsi], 1, 1, outputFile) != 1) {
                     return 2;
                 }
 
-                // reset the buffered encoding back to 0
-                bufferEnc = 0;
+                // reset the buffered encoding back to its empty state
+                for (int j = 0; j < MAX_ENC_SIZE_BITS; j++) {
+                    encArr[j] = ENC_END;
+                }
                 // set the new start of the next encoding
-                *currEncodingIndex = i + 1;
+                *currEncodingIndex = bufferi + 1;
 
                 break;
             }
         }
-
-        // If unrecognized, shift bits over 1 left to make room for next bit
-        // (does nothing if bufferInt is 0)
-        bufferEnc = bufferEnc << 1;
     }
 
     return 0;
@@ -339,26 +379,46 @@ Returns 2 if there was an error writing to the <outputFile>
 Returns 3 if there was an error reading from <inputFile>
 */
 int decode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
-    // We keep a bit buffer for the input.
-    // (an individual character can be encoded in at most MAX_ENC_SIZE bytes
-    // and so we keep 2 * MAX_ENC_SIZE bytes for overflow purposes)
-    unsigned char buffer[MAX_ENC_SIZE * 2];
+    // The footer of the file stores the number of padding bits we used.
+    if (fseek(inputFile, -1 * FOOTER_SIZE, SEEK_END) == -1) {
+        return 3;
+    }
+    // Stores the byte position of beginning of the last body content byte
+    long lastContentByte = ftell(inputFile) - 1;
 
-    // Fill the buffer with zeroes
-    for (int i = 0; i < MAX_ENC_SIZE * 2; i++) {
-        buffer[i] = 0;
+    FOOTER_TYPE numPaddingBits = 0;
+    if (fread(&numPaddingBits, FOOTER_SIZE, 1, inputFile) == -1) {
+        return 3;
+    }
+    rewind(inputFile);
+
+    // We keep a bit buffer for the input.
+    // (an individual character can be encoded in at most MAX_ENC_SIZE_BYTES bytes
+    // and so we keep 2 * MAX_ENC_SIZE_BITS bits for overflow purposes)
+    char buffer[MAX_ENC_SIZE_BITS * 2];
+
+    // Initialize the buffer using the ENC_END character
+    for (int i = 0; i < MAX_ENC_SIZE_BITS * 2; i++) {
+        buffer[i] = ENC_END;
     }
 
-    // Read in MAX_ENC_SIZE bytes into the buffer starting at the next available bit
+    // Read in MAX_ENC_SIZE_BYTES bytes into the buffer starting at the next available bit
     unsigned int readbuffer = 0;
     // The index after the last bit of data in the buffer.
     int bufferEnd = 0;
     // Keeps track of how many bytes were read for the last call
-    int bytes_read = 0;
-    while ((bytes_read = fread(&readbuffer, 1, MAX_ENC_SIZE, inputFile)) == MAX_ENC_SIZE) {
+    int bytesRead = 0;
+    // Loop until we reach the last content byte or some read issue occurs.
+    for (int currByte = 0; currByte < lastContentByte; currByte++) {
+        // Read in the next byte
+        if ((bytesRead = fread(&readbuffer, 1, 1, inputFile)) != 1) {
+            // Some read error occurred or unexpected EOF
+            return 3;
+        }
+
         // Insert the readbuffer into the correct bits in the bit buffer <buffer>
         insert_int_by_bit(readbuffer, buffer, bufferEnd);
-        bufferEnd += MAX_ENC_SIZE * 8;
+        bufferEnd += bytesRead * 8;
 
         // Greedily decode the buffered bits
         // holds the index of the start of the current encoding for shifting the buffer over
@@ -371,36 +431,48 @@ int decode_file(FILE *inputFile, FILE *outputFile, Encoding encoding) {
         }
 
         // Shift all leftover bits to the beginning of the buffer.
-        // Pad any extra space with zeroes.
+        // Pad any extra space with ENC_END.
         int leftover_bit_count = 0;
-        // ri tracks the index of the leftover buffered bits
+        // ri tracks the index of the leftover bits to copy over to the left
         int ri = currEncodingIndex;
-        // li tracks the index starting from the left side of the buffer
-        for (int li = 0; li < (MAX_ENC_SIZE * 2) * 8; li++) {
-            // If there are no more leftover bits, we set the lith bit to 0.
-            int leftover_bit = 0;
+        // li tracks the index to copy the leftover bits to (from the left)
+        for (int li = 0; li < (MAX_ENC_SIZE_BITS * 2); li++) {
+            // If there are no more leftover bits, we set the lith bit to ENC_END;
+            char leftover_bit = ENC_END;
             if (ri < bufferEnd) {
                 // There are still leftover bits to read
-                // The leftover bit from the buffer at index ri.
-                leftover_bit = get_ith_bit(buffer, ri);
+                leftover_bit = buffer[ri];
                 leftover_bit_count++;
             }
 
-            // Set the lith bit in the buffer to the leftover bit
-            set_ith_bit(buffer, li, leftover_bit);
+            buffer[li] = leftover_bit;
             ri++;
         }
         bufferEnd = leftover_bit_count;
     }
 
-    if (ferror(inputFile)) {
+    // Check if we exited the loop because there was a file read error or the file ended unexpectedly
+    // (otherwise we exited because we reached the last content byte position.
+    if (ferror(inputFile) || feof(inputFile)) {
+        return 3;
+    }
+
+    // We are just before the last content byte. Read this content byte in and turn any padding
+    // bits into ENC_END before decoding the final content byte.
+    if ((bytesRead = fread(&readbuffer, 1, 1, inputFile)) != 1) {
         return 3;
     }
 
     insert_int_by_bit(readbuffer, buffer, bufferEnd);
-    bufferEnd += bytes_read * 8;
+    bufferEnd += (bytesRead * 8);
 
-    // Take care of any remaining bytes
+    // Turn the last numPaddingBits into ENC_END as they were padding.
+    for (int i = bufferEnd - 1; i > bufferEnd - numPaddingBits - 1; i--) {
+        buffer[i] = ENC_END;
+    }
+    bufferEnd -= numPaddingBits;
+
+    // Decode the last byte as normal
     int currEncodingIndex = 0;
     int decode_ret = decode_buffer(buffer, &currEncodingIndex, bufferEnd, outputFile, encoding);
     return decode_ret;

@@ -6,22 +6,31 @@ to allow for the full keyboard character range plus extra characters.
 This program is extendable to larger alphabets but would require different
 data structure implementation for larger alphabets. */
 #define MAX_ALPHABET_LEN 128
-// The header is the first HEADER_SIZE bytes that identify the encoding file
+// The header is the first HEADER_SIZE bytes that identify the *encoding* file
 #define HEADER_SIZE 5
 #define HEADER "HFENC"
-// The maximum size of any single encoding in bytes
-#define MAX_ENC_SIZE sizeof(int)
+// The maximum size of any single encoding in *bits*
+#define MAX_ENC_SIZE_BITS 32
+// The maximum size of any single encoding in *bytes*
+#define MAX_ENC_SIZE_BYTES 4
+// Used to mark the end of an encoding in the encoding integer array
+#define ENC_END -1
+// The footer is the last FOOTER_SIZE bytes in the *compressed* file that contain extra data
+// (like the number of padding bits in the last encoded character)
+#define FOOTER_SIZE 1
+// The data type used for the footer (the last number of padding bits will be between 0 and 7)
+#define FOOTER_TYPE char
 
 /*
 The data type used for the encoding of an alphabet.
 Denoted by <name>.
-<alphabetlen> is the length of the alphabet
+<alphabetlen> is the length of the alphabet.
 */
 typedef struct encoding {
     char name[MAX_NAME];
     int alphabetlen;
     char alphabet[MAX_ALPHABET_LEN];
-    int encodings[MAX_ALPHABET_LEN];
+    int encodings[MAX_ALPHABET_LEN][MAX_ENC_SIZE_BITS];
 } Encoding;
 
 /*
@@ -35,18 +44,6 @@ typedef struct frequencies {
     char alphabet[MAX_ALPHABET_LEN];
     float frequencies[MAX_ALPHABET_LEN];
 } Frequencies;
-
-/*
-Parse the int array into an integer encoding.
-
-The entries of <intArr> should be 0 or 1 for the length of the encoding and -1 to indicate
-the encoding is finished.
-
-<arrMaxLen> denotes the maximum length of <intArr> and must be at least 1
-
-If we reach the end of the array or the integer bit limit return the encoding up until this point.
-*/
-int encodingArrToInt(int intArr[], int arrMaxLen);
 
 /*
 Load the encoding from <filepath> into <encoding>.

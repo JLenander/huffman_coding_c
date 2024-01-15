@@ -6,7 +6,7 @@
 /*
 Helper method for generateEncoding.
 
-Traverses the bianry tree with root at <root> and fills the <encoding> with the prefix-free
+Traverses the binary tree with root at <root> and fills the <encoding> with the prefix-free
 encoding and alphabet details.
 
 <currEncoding> is an array specifying the current prefix-free encoding based on the branches we are
@@ -21,7 +21,10 @@ void traverseEncodingTree(Encoding *encoding, Tree *root, int currEncoding[], in
         // We've reached a leaf node containing a real symbol instead of a dummy symbol
         // Add this symbol to the next available spot and record the encoding associated with it
         encoding->alphabet[encoding->alphabetlen] = root->symbol;
-        encoding->encodings[encoding->alphabetlen] = encodingArrToInt(currEncoding, encodingCurrPos);
+        // Copy the encoding bits over
+        for (int i = 0; i < MAX_ENC_SIZE_BITS; i++) {
+            encoding->encodings[encoding->alphabetlen][i] = currEncoding[i];
+        }
         encoding->alphabetlen++;
 
         return;
@@ -48,7 +51,6 @@ There must be at least two symbols in <freqs>
 Encoding *generateEncoding(Frequencies freqs, char encodingName[MAX_NAME]) {
     // Construct the priority queue form the symbols in freqs
     // Each symbol's weight is the frequency provided
-
     PriorityQueue *pqueue = newQueue(freqs.alphabetlen);
     for (int i = 0; i < freqs.alphabetlen; i++) {
         // Method newQueueItem does not malloc a new queueitem struct so this calling method
