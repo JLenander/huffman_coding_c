@@ -27,8 +27,9 @@ being decoded into text.
   used as padding in the last encoded character
 
 ## Encoding notes
-### Change in encoding with commit d3646b48fa4f5123156e2e7a5166fcc7be7d10f2
-The Encoding data structure defined in [`encoding.h`](encoding.h) was changed with commit d3646b48fa4f5123156e2e7a5166fcc7be7d10f2.
+### Change in encoding with commit d3646b4
+The Encoding data structure defined in [`encoding.h`](encoding.h) was changed with commit [d3646b4](https://github.com/JLenander/huffman_coding_c/commit/d3646b48fa4f5123156e2e7a5166fcc7be7d10f2)
+
 While the old structure was more space and runtime efficient (with bitwise operations and single
 integer comparisons to handle comparing encodings) the old format did not allow for leading zeros
 in an encoding
@@ -42,7 +43,7 @@ for an alphabet which decreases the average binary encoding size (number of bits
 
 The increase in compression rate was why I made the choice to refactor the code and change the format.
 
-The previous format and bitwise manipulation can be viewed in this prior state: https://github.com/JLenander/huffman_coding_c/tree/56131b92b1cceee0cf663af51ffd542873b2675f
+The previous format and bitwise manipulation can be viewed in [this prior state](https://github.com/JLenander/huffman_coding_c/tree/56131b92b1cceee0cf663af51ffd542873b2675f)
 
 ## Examples
 #### Small encoding consisting of characters {a,b,c,d,e,f,\n}
