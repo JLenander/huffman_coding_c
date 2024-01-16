@@ -46,6 +46,34 @@ typedef struct frequencies {
 } Frequencies;
 
 /*
+Construct and return a pointer to a new empty encoding struct with name <name>
+*/
+Encoding *newEncoding(char *name);
+
+/*
+Construct and return a pointer to a new empty frequency struct with name <name>
+*/
+Frequencies *newFrequencies(char *name);
+
+/*
+Deconstruct the encoding struct pointed to by the pointer <encodingPtr>
+and free memory associated with it
+
+Return 0 on success
+Return 1 otherwise
+*/
+int destroyEncoding(Encoding *encodingPtr);
+
+/*
+Deconstruct the frequencies struct pointed to by the pointer <freqPtr>
+and free memory associated with it
+
+Return 0 on success
+Return 1 otherwise
+*/
+int destroyFrequencies(Frequencies *freqPtr);
+
+/*
 Load the encoding from <filepath> into <encoding>.
 Returns 0 on success.
 On error, returns:

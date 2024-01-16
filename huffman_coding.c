@@ -97,20 +97,11 @@ Encoding *generateEncoding(Frequencies freqs, char encodingName[MAX_NAME]) {
     and every right branch corresponds to a 1 for a symbol's encoding
     Perform a binary tree traversal and keep track of which branch is taken for each symbol
     */
-    Encoding *encoding = malloc(sizeof(Encoding));
-    if (encoding == NULL) {
-        fprintf(stderr, "Failed to allocate space for new encoding\n");
-        exit(1);
-    }
+    Encoding *encoding = newEncoding(encodingName);
 
-    strncpy(encoding->name, encodingName, MAX_NAME);
-    encoding->name[MAX_NAME - 1] = '\0';
-    encoding->alphabetlen = 0;  // This will be used by the traversal algorithm to keep track
-                                // of how many encodings are currently stored
-
-    int currEncoding[freqs.alphabetlen];
-    for (int i = 0; i < freqs.alphabetlen; i++) {
-        currEncoding[i] = -1;
+    int currEncoding[MAX_ENC_SIZE_BITS];
+    for (int i = 0; i < MAX_ENC_SIZE_BITS; i++) {
+        currEncoding[i] = ENC_END;
     }
     traverseEncodingTree(encoding, lastTreeNodeCreated, currEncoding, 0);
 

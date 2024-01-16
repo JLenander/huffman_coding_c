@@ -4,34 +4,75 @@
 #include <unistd.h>
 #include "encoding.h"
 
-// /*
-// Parse the int array into an integer encoding.
+/*
+Construct and return a pointer to a new empty encoding struct with name <name>
+*/
+Encoding *newEncoding(char *name) {
+    Encoding *newEnc = malloc(sizeof(Encoding));
+    if (newEnc == NULL) {
+        fprintf(stderr, "Failed to allocate memory for new encoding struct\n");
+        exit(1);
+    }
 
-// The entries of <intArr> should be 0 or 1 for the length of the encoding and -1 to indicate
-// the encoding is finished.
+    strncpy(newEnc->name, name, MAX_NAME);
+    newEnc->name[MAX_NAME - 1] = '\0';
 
-// <arrMaxLen> denotes the maximum length of <intArr> and must be at least 1
+    newEnc->alphabetlen = 0;
 
-// If we reach the end of the array or the integer bit limit return the encoding up until this point.
-// */
-// int encodingArrToInt(int intArr[], int arrMaxLen) {
-//     // Ensure we do not exceed the integer limit
-//     arrMaxLen = (arrMaxLen > sizeof(int) * 8) ? sizeof(int) * 8 : arrMaxLen;
+    for (int i = 0; i < MAX_ALPHABET_LEN; i++) {
+        newEnc->alphabet[i] = '\0';
+        memset(newEnc->encodings[i], ENC_END, MAX_ENC_SIZE_BITS * sizeof(newEnc->encodings[0]));
+    }
 
-//     int encoding = intArr[0];
+    return newEnc;
+}
 
-//     for (int i = 1; i < arrMaxLen; i++) {
-//         if (intArr[i] == -1) {
-//             return encoding;
-//         }
+/*
+Construct and return a pointer to a new empty frequency struct with name <name>
+*/
+Frequencies *newFrequencies(char *name) {
+    Frequencies *newFreq = malloc(sizeof(Frequencies));
+    if (newFreq == NULL) {
+        fprintf(stderr, "Failed to allocate memory for new frequency struct\n");
+        exit(1);
+    }
 
-//         encoding = encoding << 1;
-//         encoding += intArr[i];
-//     }
+    strncpy(newFreq->name, name, MAX_NAME);
+    newFreq->name[MAX_NAME - 1] = '\0';
 
-//     return encoding;
-// }
+    newFreq->alphabetlen = 0;
 
+    for (int i = 0; i < MAX_ALPHABET_LEN; i++) {
+        newFreq->alphabet[i] = '\0';
+        newFreq->frequencies[i] = 0.0;
+    }
+
+    return newFreq;
+}
+
+/*
+Deconstruct the encoding struct pointed to by the pointer <encodingPtr>
+and free memory associated with it
+
+Return 0 on success
+Return 1 otherwise
+*/
+int destroyEncoding(Encoding *encodingPtr) {
+    free(encodingPtr);
+    return 0;
+} 
+
+/*
+Deconstruct the frequencies struct pointed to by the pointer <freqPtr>
+and free memory associated with it
+
+Return 0 on success
+Return 1 otherwise
+*/
+int destroyFrequencies(Frequencies *freqPtr) {
+    free(freqPtr);
+    return 0;
+}
 
 /*
 Load the encoding from <filepath> into <encoding>.
