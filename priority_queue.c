@@ -82,7 +82,7 @@ int enqueue(PriorityQueue *pqueue, QueueItem item) {
     }
 
     // Add the item to the next empty slot
-    int i = pqueue->length - 1;
+    int i = 0;
     while (i < pqueue->maxQueueLength) {
         if (pqueue->queue[i].empty) {
             break;
